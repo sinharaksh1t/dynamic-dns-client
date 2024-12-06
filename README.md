@@ -1,2 +1,3 @@
 # dynamic-dns-client
-A simple client to update dynamic DNS entries.
+
+A simple [FreeDNS](https://freedns.afraid.org/) client to update dynamic DNS entries.
