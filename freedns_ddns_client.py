@@ -2,6 +2,7 @@ import argparse
 import hashlib
 import logging
 import os
+import sys
 
 import ezgmail
 import requests
@@ -51,6 +52,9 @@ def send_email_notification(cached, current):
 
     # Use command separated recipients if you want more than one
     recipients = os.getenv("recipients")
+    if recipients == None:
+        logr.error("Recipients list cannot be empty. No email notification sent.")
+        return
     subject = "Public IP change notification"
     body = f"Your public IP has probably changed. Cached: {cached}, Current: {current}"
     ezgmail.send(recipients, subject, body, mimeSubtype="html")
@@ -70,6 +74,9 @@ def update_public_ip_freedns():
     # Get the username and password from env
     username = os.getenv("username")
     passwd = os.getenv("passwd")
+    if username == None or passwd == None:
+        logr.error("Username or password cannot be empty. Check .env file and retry")
+        sys.exit(1)
 
     decoded_token = f"{username}|{passwd}"
     encoded_token = sha1_encode(decoded_token)
@@ -78,7 +85,26 @@ def update_public_ip_freedns():
         f"https://freedns.afraid.org/api/?action=getdyndns&v=2&sha={encoded_token}"
     )
     resp = requests.get(get_update_url)
-    update_url = resp.text.split("|")[-1]
+    candidates = resp.text.split("\n")
+    url_text = ""
+    if len(candidates) > 1:
+        domain = os.getenv("domain")
+        if domain == None:
+            logr.error("You have multiple FreeDNS domains, the `domain` field in .env file is required.")
+            sys.exit(1)
+        for candidate in candidates:
+            if domain in candidate:
+                url_text = candidate
+        if url_text== "":
+            logr.error(f"The provided domain `{domain} not found in your list of FreeDNS domains.")
+            sys.exit(1)
+    elif len(candidates) == 1:
+        url_text=resp.text
+    else:
+        logr.error("Unexpected error occurred. No FreeDNS domains found.")
+        sys.exit(1)
+
+    update_url = url_text.split("|")[-1]
 
     update_resp = requests.get(update_url)
     logr.info(update_resp.text)
