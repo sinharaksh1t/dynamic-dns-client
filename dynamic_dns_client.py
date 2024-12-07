@@ -1,3 +1,4 @@
+import argparse
 import hashlib
 import logging
 import os
@@ -30,10 +31,18 @@ def what_is_my_public_ip():
 
 def what_is_my_cached_ip():
     logr.info("Fetching cached public IP")
-    with open(PUBLIC_IP_FILE, "r", encoding="utf-8") as file:
-        cached_public_ip = file.readline()
+    try:
+        with open(PUBLIC_IP_FILE, "r", encoding="utf-8") as file:
+            cached_public_ip = file.readline()
+    except FileNotFoundError:
+        # If the file is not found, create one
+        with open(PUBLIC_IP_FILE, "w", encoding="utf-8") as _:
+            pass
+
     if len(cached_public_ip) == 0:
         logr.error("No cached public IP found")
+        cached_public_ip = ""
+
     return cached_public_ip
 
 
@@ -65,9 +74,7 @@ def update_public_ip_freedns():
     decoded_token = f"{username}|{passwd}"
     encoded_token = sha1_encode(decoded_token)
 
-    get_update_url = (
-        f"https://freedns.afraid.org/api/?action=getdyndns&v=2&sha={encoded_token}"
-    )
+    get_update_url = f"https://freedns.afraid.org/api/?action=getdyndns&v=2&sha={encoded_token}"
     resp = requests.get(get_update_url)
     update_url = resp.text.split("|")[-1]
 
@@ -82,10 +89,18 @@ def update_public_ip_cache(current_public_ip):
 
     logr.info("Cached IP updated successfully")
 
+def parse_arguments():
+    # Parsing command line arugments
+    parser = argparse.ArgumentParser(description='Parse the command line arguments for this client')
+    parser.add_argument("-e", "--email",default="no", type=str, choices=["yes","no"],required=False, help='Set this flag to True to receive email notifications when public IP has changed. NOTE: You need the module ezgmail to be installed and instantiated for this option to work.')
+    args = parser.parse_args()
+    return args
+
 
 def run():
     initLogger()
     load_dotenv()  # This line brings all environment variables from .env into os.environ or os.getenv
+    args = parse_arguments()
     logr.info("Starting dynamic dns client")
 
     # Fetch current public IP address
@@ -98,11 +113,14 @@ def run():
 
     # Check if the current matches the cached
     if cached_public_ip != current_public_ip:
-        logr.info("Public IP has been updated")
-        # Send Notification email
-        send_email_notification(cached_public_ip, current_public_ip)
+        logr.info("Public IP has changed, starting to update the cache and DDNS IP")
+        if args.email == "yes":
+            # Send Notification email if the --email flag is set
+            send_email_notification(cached_public_ip, current_public_ip)
+
         # Update public IP on freedns
         update_public_ip_freedns()
+
         # Update public IP in the file
         update_public_ip_cache(current_public_ip)
     else:
