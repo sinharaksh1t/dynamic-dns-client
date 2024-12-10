@@ -1,3 +1,7 @@
+"""
+A FreeDNS dynamic DNS client
+"""
+
 import argparse
 import hashlib
 import logging
@@ -68,7 +72,7 @@ def send_email_notification(cached, current):
     try:
         ezgmail.send(recipients, subject, body, mimeSubtype="html")
     except Exception as e:
-        logr.error(f"Unexpected Error occurred while sending email: {e}")
+        logr.error("Unexpected Error occurred while sending email: %e", e)
         print(
             "Unexpected Errror occurred. Check the log file `app.log` for more details"
         )
